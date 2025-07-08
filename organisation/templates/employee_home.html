@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Employee Dashboard</title>
+    <style>
+        :root {
+            --primary-color: #4CAF50;
+            --secondary-color: #2196F3;
+            --danger-color: #f44336;
+            --light-gray: #f4f4f9;
+            --dark-gray: #333;
+            --medium-gray: #555;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: var(--light-gray);
+            color: var(--dark-gray);
+        }
+        
+        .header {
+            background-color: var(--primary-color);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+        }
+        
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background-color: var(--secondary-color);
+            color: white;
+        }
+        
+        .btn-danger {
+            background-color: var(--danger-color);
+            color: white;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            padding: 20px;
+        }
+        
+        .card h2 {
+            color: var(--primary-color);
+            margin-top: 0;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+        
+        .info-item {
+            margin-bottom: 10px;
+        }
+        
+        .info-label {
+            font-weight: bold;
+            color: var(--medium-gray);
+            display: block;
+            margin-bottom: 3px;
+        }
+        
+        .info-value {
+            padding: 5px;
+            background-color: var(--light-gray);
+            border-radius: 4px;
+        }
+        
+        .quick-actions {
+            margin-top: 30px;
+        }
+        
+        .quick-actions h2 {
+            margin-bottom: 15px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        @media (max-width: 768px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+            
+            .header-buttons {
+                width: 100%;
+                justify-content: space-between;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Employee Dashboard</h1>
+        <div class="header-buttons">
+            <a href="/api/" class="btn btn-secondary">API Dashboard</a>
+            <a href="{% url 'employee_logout' %}" class="btn btn-danger">Logout</a>
+        </div>
+    </div>
+    
+    <div class="container">
+        <div class="dashboard-grid">
+            <div class="card">
+                <h2>Your Profile</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Name:</span>
+                        <span class="info-value">{{ employee.name }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Email:</span>
+                        <span class="info-value">{{ employee.email }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Mobile:</span>
+                        <span class="info-value">{{ employee.mobile_number }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Designation:</span>
+                        <span class="info-value">{{ employee.designation }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Joining Date:</span>
+                        <span class="info-value">{{ employee.joining_date }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Salary:</span>
+                        <span class="info-value">{{ employee.salary }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Age:</span>
+                        <span class="info-value">{{ employee.age }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Branch Information</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Branch Name:</span>
+                        <span class="info-value">{{ branch.name }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Branch City:</span>
+                        <span class="info-value">{{ branch.city }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Branch State:</span>
+                        <span class="info-value">{{ branch.state }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Branch Email:</span>
+                        <span class="info-value">{{ branch.email }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Organisation Information</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Organisation Name:</span>
+                        <span class="info-value">{{ organisation.name }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Organisation City:</span>
+                        <span class="info-value">{{ organisation.city }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Organisation State:</span>
+                        <span class="info-value">{{ organisation.state }}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card">
+                <h2>Company Information</h2>
+                <div class="info-grid">
+                    <div class="info-item">
+                        <span class="info-label">Company Name:</span>
+                        <span class="info-value">{{ company.name }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Company State:</span>
+                        <span class="info-value">{{ company.state }}</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Company City:</span>
+                        <span class="info-value">{{ company.city }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        
+    </div>
+
+    <script>
+    // Get CSRF token from cookies
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    
+    const csrfToken = getCookie('csrftoken');
+    
+    // Configure axios
+    if (typeof axios !== 'undefined') {
+        axios.defaults.headers.common['X-CSRFToken'] = csrfToken;
+        axios.defaults.xsrfCookieName = 'csrftoken';
+        axios.defaults.xsrfHeaderName = 'X-CSRFToken';
+    }
+
+    
+</script>
+</body>
+</html>

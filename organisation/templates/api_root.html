@@ -1,0 +1,1475 @@
+{% extends "api_base.html" %}
+{% block content %}
+{% load static %}
+<div class="card">
+    <div class="header">
+        <h1>API Dashboard</h1>
+        <div class="auth-info">
+            {% if request.user.is_authenticated %}
+            <span>Welcome, {{ request.user.email }}</span>
+            <a href="{% url 'employee_logout' %}"><button class="logout-btn">Logout</button></a>
+            {% else %}
+            <a href="/login/"><button class="login-btn">Login</button></a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="dashboard-container">
+        <div class="navigation">
+            <div class="nav-section">
+                <h3>Entities</h3>
+                <ul>
+                    <li><a href="#" class="entity-link" data-entity="organisations">Organisations</a></li>
+                    <li><a href="#" class="entity-link" data-entity="branches">Branches</a></li>
+                    <li><a href="#" class="entity-link" data-entity="companies">Companies</a></li>
+                    <li><a href="#" class="entity-link" data-entity="employees">Employees</a></li>
+                </ul>
+            </div>
+
+            <div class="create-buttons">
+                <h3>Actions</h3>
+                {% if request.user.is_superuser %}
+                    <button class="create-btn" data-entity="organisations">Create Organisation</button>
+                    <button class="create-btn" data-entity="branches">Create Branch</button>
+                    <button class="create-btn" data-entity="companies">Create Company</button>
+                {% endif %}
+                {% if request.user.is_superuser or is_branch_admin or request.user.employee_profile.can_create %}
+                    <button class="create-btn" data-entity="employees">Create Employee</button>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="content-area">
+            <div id="api-response" class="response-area">
+                <h2>Welcome to the API Dashboard</h2>
+                <p>Select an entity from the navigation to view or manage data.</p>
+                <p>Use the action buttons to create new records.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    (function () {
+        const API_BASE = '/';
+        axios.interceptors.request.use(request => {
+            console.log('Starting Request', request);
+            return request;
+        });
+
+        axios.interceptors.response.use(response => {
+            console.log('Response:', response);
+            return response;
+        });
+        axios.defaults.withCredentials = true;
+        axios.defaults.baseURL = '/api/';
+        axios.defaults.headers.common['Content-Type'] = 'application/json';
+        axios.defaults.xsrfCookieName = 'csrftoken';
+        axios.defaults.xsrfHeaderName = 'X-CSRFToken';
+
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+
+        const csrftoken = getCookie('csrftoken');
+        const CURRENT_USER_ID = {{ request.user.id }};
+        const IS_SUPERUSER = {{ request.user.is_superuser|yesno:"true,false" }};
+        const CURRENT_USER_IS_BRANCH_ADMIN = {{ is_branch_admin|yesno:"true,false" }};
+        const CURRENT_USER_BRANCH_ID = {{ branch_id|default:"null" }};
+        const CURRENT_USER_EMPLOYEE_ID = {{ employee_profile_id|default:"null" }};
+        const CURRENT_USER_CAN_CREATE = {{ request.user.employee_profile.can_create|yesno:"true,false" }};
+        const CURRENT_USER_CAN_EDIT = {{ request.user.employee_profile.can_edit|yesno:"true,false" }};
+        const CURRENT_USER_CAN_DELETE = {{ request.user.employee_profile.can_delete|yesno:"true,false" }};
+
+    // Field configurations for each entity type
+    const ENTITY_FIELDS = {
+        organisations: [
+            { name: 'name', type: 'text', required: true },
+            { name: 'mobile_number', type: 'text', required: true },
+            { name: 'email', type: 'email', required: false },
+            { name: 'address', type: 'textarea', required: true },
+            { name: 'landmark', type: 'text', required: false },
+            { name: 'city', type: 'text', required: true },
+            { name: 'pincode', type: 'text', required: false },
+            { name: 'state', type: 'text', required: true },
+            { name: 'country', type: 'text', required: true },
+            { name: 'is_active', type: 'checkbox', required: false },
+            { name: 'is_delete', type: 'checkbox', required: false },
+            { name: 'created_by', type: 'hidden', required: false, value: CURRENT_USER_ID },
+            { name: 'modified_by', type: 'hidden', required: false, value: CURRENT_USER_ID, show: IS_SUPERUSER }
+        ],
+        branches: [
+            { name: 'name', type: 'text', required: true },
+            { name: 'mobile_number', type: 'text', required: true },
+            { name: 'email', type: 'email', required: false },
+            { name: 'address', type: 'textarea', required: true },
+            { name: 'landmark', type: 'text', required: false },
+            { name: 'city', type: 'text', required: true },
+            { name: 'pincode', type: 'text', required: false },
+            { name: 'state', type: 'text', required: true },
+            { name: 'country', type: 'text', required: true },
+            { name: 'organisation', type: 'select', required: true, optionsUrl: 'organisations/' },
+            { name: 'is_active', type: 'checkbox', required: false },
+            { name: 'is_delete', type: 'checkbox', required: false },
+            { name: 'created_by', type: 'hidden', required: false, value: CURRENT_USER_ID },
+            { name: 'modified_by', type: 'hidden', required: false, value: CURRENT_USER_ID }
+        ],
+        companies: [
+            { name: 'name', type: 'text', required: true },
+            { name: 'mobile_number', type: 'text', required: true },
+            { name: 'email', type: 'email', required: false },
+            { name: 'address', type: 'textarea', required: true },
+            { name: 'landmark', type: 'text', required: false },
+            { name: 'city', type: 'text', required: true },
+            { name: 'pincode', type: 'text', required: false },
+            { name: 'state', type: 'text', required: true },
+            { name: 'country', type: 'text', required: true },
+            { name: 'branch', type: 'select', required: true, optionsUrl: 'branches/' },
+            { name: 'is_active', type: 'checkbox', required: false },
+            { name: 'is_delete', type: 'checkbox', required: false },
+            { name: 'created_by', type: 'hidden', required: false, value: CURRENT_USER_ID },
+            { name: 'modified_by', type: 'hidden', required: false, value: CURRENT_USER_ID }
+        ],
+        employees: [
+            { name: 'email', type: 'email', required: true, createOnly: true },
+            { name: 'password', type: 'password', required: true, createOnly: true },
+            { name: 'name', type: 'text', required: true },
+            { name: 'mobile_number', type: 'text', required: true },
+            { name: 'address', type: 'textarea', required: true },
+            { name: 'landmark', type: 'text', required: false },
+            { name: 'city', type: 'text', required: true, pattern: '^[a-zA-Z\\s]+$', title: 'City name (letters only)' },
+            { name: 'pincode', type: 'text', required: false },
+            { name: 'state', type: 'text', required: true, pattern: '^[a-zA-Z\\s]+$', title: 'State name (letters only)' },
+            { name: 'country', type: 'text', required: true },
+            { name: 'branch', type: 'select', required: true, optionsUrl: 'branches/' },
+            { name: 'company', type: 'select', required: true, optionsUrl: 'companies/' },
+            { name: 'designation', type: 'text', required: true },
+            { name: 'salary', type: 'number', required: false },
+            { name: 'joining_date', type: 'date', required: true },
+            { name: 'date_of_birth', type: 'date', required: true },
+            { name: 'is_active', type: 'checkbox', required: false },
+            { name: 'is_delete', type: 'checkbox', required: false },
+            { name: 'is_branch_admin', type: 'checkbox', required: false, show: IS_SUPERUSER || CURRENT_USER_IS_BRANCH_ADMIN },
+            { name: 'is_superuser', type: 'checkbox', required: false, show: IS_SUPERUSER, disabled: !IS_SUPERUSER },
+            { name: 'can_create', type: 'checkbox', required: false, show: IS_SUPERUSER || CURRENT_USER_IS_BRANCH_ADMIN },
+            { name: 'can_edit', type: 'checkbox', required: false, show: IS_SUPERUSER || CURRENT_USER_IS_BRANCH_ADMIN },
+            { name: 'can_delete', type: 'checkbox', required: false, show: IS_SUPERUSER || CURRENT_USER_IS_BRANCH_ADMIN },
+            { name: 'created_by', type: 'hidden', required: false, value: CURRENT_USER_ID },
+            { name: 'modified_by', type: 'hidden', required: false, value: CURRENT_USER_ID },
+        ]
+    };
+
+    // Global variables to track current context
+    let currentEntity = '';
+    let currentItemId = null;
+
+    // Fetch data for an entity
+    window.fetchData = async function (entity) {
+        try {
+            currentEntity = entity;
+            const response = await axios.get(`${entity}/`, {
+                headers: {
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                }
+            });
+
+            if (response.status === 200 && response.data) {
+                renderEntityList(response.data);
+            } else {
+                showErrorMessage(`No data available for ${entity}`);
+            }
+        } catch (error) {
+            console.error(`Error fetching ${entity}:`, error);
+            let errorMsg = `Failed to load ${entity}`;
+
+            if (error.response) {
+                if (error.response.status === 403) {
+                    errorMsg = "You don't have permission to view this data";
+                } else if (error.response.data && error.response.data.detail) {
+                    errorMsg = error.response.data.detail;
+                }
+            }
+
+            showErrorMessage(errorMsg);
+            // Show empty state for the entity
+            document.getElementById('api-response').innerHTML = `
+                <div class="no-data">
+                    <h3>No ${entity} data available</h3>
+                    <p>${errorMsg}</p>
+                </div>
+            `;
+        }
+    };
+
+    // Render the entity list with CRUD actions
+    function renderEntityList(data) {
+        const responseArea = document.getElementById('api-response');
+        responseArea.innerHTML = '';
+
+        console.log('Rendering data:', data);
+
+
+
+        if (!Array.isArray(data)) {
+            responseArea.innerHTML = `
+                <div class="error">
+                    <h3>Data Format Error</h3>
+                    <p>Expected array but got: ${typeof data}</p>
+                    <pre>${JSON.stringify(data, null, 2)}</pre>
+                </div>`;
+            return;
+        }
+
+        // Determine if we should show the create button for this entity
+        let showCreateButton = false;
+        if (currentEntity === 'employees') {
+            showCreateButton = IS_SUPERUSER || CURRENT_USER_IS_BRANCH_ADMIN || CURRENT_USER_CAN_CREATE;
+        } else {
+            showCreateButton = IS_SUPERUSER ;
+        }
+
+        let html = `
+            <div class="entity-header">
+                <h2>${currentEntity.charAt(0).toUpperCase() + currentEntity.slice(1)}</h2>
+                ${showCreateButton ? `<button class="create-btn" data-entity="${currentEntity}">Create New</button>` : ''}
+            </div>
+        `;
+
+        if (data.length > 0) {
+            html += `<div class="entity-list"><table class="entity-table"><thead><tr>`;
+
+            // Table headers - adjust based on entity type
+            if (currentEntity === 'employees') {
+                html += `
+                    <th>Name</th>
+                    <th>Username</th>
+                    <th>Branch</th>
+                    <th>Active</th>
+                    ${IS_SUPERUSER ? '<th>Superuser</th>' : ''}
+                    <th>Branch Admin</th>
+                    <th>Can Create</th>
+                    <th>Can Edit</th>
+                    <th>Can Delete</th>
+                    <th class="actions-header">Actions</th>
+                `;
+            } else {
+                html += `
+                    <th>Name</th>
+                    <th>City</th>
+                    <th>State</th>
+                    <th>Active</th>
+                    <th class="actions-header">Actions</th>
+                `;
+            }
+
+            html += `</tr></thead><tbody>`;
+
+            // Create table rows
+            data.forEach(item => {
+                const isSameBranch = item.branch &&
+                    (typeof item.branch === 'object' ?
+                        item.branch.id === CURRENT_USER_BRANCH_ID :
+                        item.branch === CURRENT_USER_BRANCH_ID);
+                const isEditingSelf = currentEntity === 'employees' && item.id === CURRENT_USER_EMPLOYEE_ID;
+                const isOtherAdmin = item.is_branch_admin && !isEditingSelf;
+
+                // Start row
+                html += `<tr>`;
+
+                // Employee-specific columns
+                if (currentEntity === 'employees') {
+                    html += `
+                        <td>${item.user?.name || ''}</td>
+                        <td>${item.user?.email || ''}</td>
+                        <td>${item.branch?.name || ''}</td>
+                        <td>${item.is_active ? '✓' : '✗'}</td>
+                        ${IS_SUPERUSER ? `<td>${item.is_superuser ? '✓' : '✗'}</td>` : ''}
+                        <td>${item.is_branch_admin ? '✓' : '✗'}</td>
+                        <td>${item.can_create ? '✓' : '✗'}</td>
+                        <td>${item.can_edit ? '✓' : '✗'}</td>
+                        <td>${item.can_delete ? '✓' : '✗'}</td>
+                    `;
+                } else {
+                    // Other entities
+                    html += `
+                        <td>${item.name || ''}</td>
+                        <td>${item.city || ''}</td>
+                        <td>${item.state || ''}</td>
+                        <td>${item.is_active ? '✓' : '✗'}</td>
+                    `;
+                }
+
+                // Action buttons
+                html += `<td class="actions-cell">
+                    <div class="actions">`;
+
+                // Superusers get full access
+                if (IS_SUPERUSER) {
+                    if (!item.is_superuser) {
+                        html += `
+                            <button class="edit-btn" data-entity="${currentEntity}" data-id="${item.id}">Edit</button>
+                            <button class="delete-btn" data-entity="${currentEntity}" data-id="${item.id}">Delete</button>`;
+                    } else {
+                        html += `<span class="no-actions">Superuser</span>`;
+                    }
+                }
+                // Branch admin permissions
+                else if (CURRENT_USER_IS_BRANCH_ADMIN) {
+                    if (isSameBranch && !item.is_branch_admin && !item.is_superuser) {
+                        html += `
+                            <button class="edit-btn" data-entity="${currentEntity}" data-id="${item.id}">Edit</button>
+                            <button class="delete-btn" data-entity="${currentEntity}" data-id="${item.id}">Delete</button>`;
+                    } else if (isEditingSelf) {
+                        html += `<button class="edit-btn" data-entity="${currentEntity}" data-id="${item.id}">Edit</button>`;
+                    }
+                }
+                // Regular employee permissions
+                else if (isEditingSelf) {
+                    html += `<button class="edit-btn" data-entity="${currentEntity}" data-id="${item.id}">Edit</button>`;
+                }
+
+                html += `</div></td></tr>`;
+            });
+
+            html += `</tbody></table></div>`;
+        } else {
+            html += `<div class="no-data">No ${currentEntity} found.</div>`;
+        }
+
+        responseArea.innerHTML = html;
+
+        // Add event listeners after rendering
+        document.querySelectorAll('.edit-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const entity = this.dataset.entity;
+                const id = this.dataset.id;
+                showEditForm(entity, id);
+            });
+        });
+
+        document.querySelectorAll('.delete-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                const entity = this.dataset.entity;
+                const id = this.dataset.id;
+                deleteItem(entity, id);
+            });
+        });
+
+        document.querySelectorAll('.create-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                showCreateForm(this.dataset.entity);
+            });
+        });
+
+        // Add hover effects
+        const rows = document.querySelectorAll('.entity-table tr');
+        rows.forEach(row => {
+            row.addEventListener('mouseenter', () => {
+                row.style.backgroundColor = '#f5f5f5';
+            });
+            row.addEventListener('mouseleave', () => {
+                row.style.backgroundColor = '';
+            });
+        });
+    }
+
+    // Show create form for specific entity
+    window.showCreateForm = async function (entity) {
+        try {
+            if (entity === 'branches' && CURRENT_USER_IS_BRANCH_ADMIN && !IS_SUPERUSER) {
+                showErrorMessage("Only superusers can create new branches");
+                return;
+            }
+            if (entity !== 'employees' && !IS_SUPERUSER) {
+                showErrorMessage("Only superusers can create this entity");
+                return;
+            }
+
+            // Check if user has permission to create this entity
+            if (entity === 'employees' && !CURRENT_USER_IS_BRANCH_ADMIN && !CURRENT_USER_CAN_CREATE) {
+                showErrorMessage("You don't have permission to create employees");
+                return;
+            }
+
+            currentEntity = entity;
+            const fields = ENTITY_FIELDS[entity] || [];
+
+            let formHtml = `
+                <div class="entity-header">
+                    <h2>Create New ${entity.slice(0, -1)}</h2>
+                    <button class="cancel-btn">Cancel</button>
+                </div>
+                <div class="form-container">
+                    <form id="create-form">
+            `;
+
+            // Generate form fields
+            for (const field of fields) {
+                // Skip field if show condition is not met
+                if ((field.show !== undefined && !field.show) || field.createOnly) {
+                    if (CURRENT_USER_IS_BRANCH_ADMIN || IS_SUPERUSER) {
+                        fieldToUse = { ...field, show: true };
+                    } else {
+                        continue;
+                    }
+                } else {
+                    fieldToUse = field;
+                }
+
+                if (field.type === 'hidden') {
+                    formHtml += `<input type="hidden" id="${field.name}" name="${field.name}" value="${field.value}">`;
+                    continue;
+                }
+
+                formHtml += `<div class="form-group">`;
+                formHtml += `<label for="${field.name}">${field.name.replace('_', ' ')}${field.required ? '*' : ''}</label>`;
+
+                if (field.type === 'select' && field.optionsUrl) {
+                    // Fetch options for select field
+                    try {
+                        const response = await axios.get(API_BASE + field.optionsUrl);
+                        const options = response.data;
+
+                        formHtml += `<select id="${field.name}" name="${field.name}" ${field.required ? 'required' : ''}>`;
+                        formHtml += `<option value="">Select ${field.name.replace('_', ' ')}</option>`;
+                        options.forEach(option => {
+                            // For branch admins creating employees, preselect their branch
+                            if (entity === 'employees' && field.name === 'branch' && CURRENT_USER_IS_BRANCH_ADMIN) {
+                                const selected = CURRENT_USER_BRANCH_ID && option.id == CURRENT_USER_BRANCH_ID ? 'selected' : '';
+                                formHtml += `<option value="${option.id}" ${selected}>${option.name || option.id}</option>`;
+                            } else {
+                                formHtml += `<option value="${option.id}">${option.name || option.id}</option>`;
+                            }
+                        });
+                        formHtml += `</select>`;
+                    } catch (error) {
+                        console.error(`Error fetching options for ${field.name}:`, error);
+                        formHtml += `<input type="text" id="${field.name}" name="${field.name}" ${field.required ? 'required' : ''}>`;
+                    }
+                } else if (field.type === 'textarea') {
+                    formHtml += `<textarea id="${field.name}" name="${field.name}" ${field.required ? 'required' : ''}></textarea>`;
+                } else if (field.type === 'checkbox') {
+                    // For superuser field, only show checked if it's true in the data
+                    const isChecked = field.name === 'is_active';
+                    formHtml += `<input type="checkbox" id="${field.name}" name="${field.name}" value="true" ${isChecked ? 'checked' : ''} ${field.disabled ? 'disabled' : ''}>`;
+                } else {
+                    formHtml += `<input type="${field.type}" id="${field.name}" name="${field.name}" ${field.required ? 'required' : ''}>`;
+                }
+
+                formHtml += `</div>`;
+            }
+
+            formHtml += `
+                    <div class="form-actions">
+                        <button type="button" class="cancel-btn">Cancel</button>
+                        <button type="submit" class="submit-btn">Create</button>
+                    </div>
+                </form>
+            </div>`;
+
+            document.getElementById('api-response').innerHTML = formHtml;
+
+            // Add form submit handler
+            document.getElementById('create-form').addEventListener('submit', function (e) {
+                e.preventDefault();
+                createItem();
+            });
+
+            // Add cancel button handler
+            document.querySelector('.cancel-btn').addEventListener('click', function () {
+                fetchData(currentEntity);
+            });
+        } catch (error) {
+            console.error("Error in showCreateForm:", error);
+            showErrorMessage("Failed to load creation form");
+        }
+    }
+
+    window.createItem = async function () {
+        const form = document.getElementById('create-form');
+        const formData = new FormData(form);
+        let data = {};  // Changed from const to let
+
+        // Convert form data to object
+        formData.forEach((value, key) => {
+            const element = form.querySelector(`[name="${key}"]`);
+            data[key] = element.type === 'checkbox' ? element.checked : value;
+        });
+
+        // For employee creation, structure the data correctly
+        if (currentEntity === 'employees') {
+            const employeeData = {
+                email: data.email,
+                name: data.name,
+                password: data.password,
+                mobile_number: data.mobile_number,
+                address: data.address,
+                landmark: data.landmark,
+                city: data.city,
+                state: data.state,
+                pincode: data.pincode,
+                branch: data.branch,
+                company: data.company,
+                designation: data.designation,
+                salary: data.salary,
+                joining_date: data.joining_date,
+                date_of_birth: data.date_of_birth,
+                is_active: data.is_active || true,
+                is_branch_admin: data.is_branch_admin || false,
+                is_superuser: data.is_superuser || false,
+                can_create: data.can_create || false,
+                can_edit: data.can_edit || false,
+                can_delete: data.can_delete || false
+            };
+            // Now we can reassign because data is declared with let
+            data = employeeData;
+        }
+
+        try {
+            const response = await axios.post(
+                `${API_BASE}${currentEntity}/`,
+                data,
+                {
+                    headers: {
+                        'X-CSRFToken': csrftoken,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            showSuccessMessage(`${currentEntity.slice(0, -1)} created successfully!`);
+            fetchData(currentEntity);
+        } catch (error) {
+            if (error.response && error.response.data) {
+                showErrorMessage(`Error: ${JSON.stringify(error.response.data)}`);
+            } else {
+                showErrorMessage("Network error - could not connect to server");
+            }
+        }
+    };
+
+    // Delete an item
+    window.deleteItem = async function (entity, id) {
+        if (entity !== 'employees' && !IS_SUPERUSER) {
+            showErrorMessage("Only superusers can delete this entity");
+            return;
+        }
+        if (entity === 'employees') {
+            try {
+                const response = await axios.get(API_BASE + 'employees/' + id + '/');
+                const employee = response.data;
+
+                const employeeBranchId = typeof employee.branch === 'object' ?
+                    employee.branch.id :
+                    employee.branch;
+
+                const isSameBranch = employeeBranchId === CURRENT_USER_BRANCH_ID;
+                const isEditingSelf = id === CURRENT_USER_EMPLOYEE_ID;
+
+                // Prevent deleting yourself
+                if (isEditingSelf) {
+                    showErrorMessage("You cannot delete yourself");
+                    return;
+                }
+
+                if (IS_SUPERUSER) {
+                    if (employee.is_superuser) {
+                        showErrorMessage("Cannot delete other superusers");
+                        return;
+                    }
+
+                    if (confirm(`Are you sure you want to delete this employee?`)) {
+                        await axios.delete(API_BASE + entity + '/' + id + '/', {
+                            headers: { 'X-CSRFToken': csrftoken }
+                        });
+                        showSuccessMessage("Employee deleted successfully!");
+                        fetchData(entity);
+                    }
+                    return;
+                }
+
+                // Branch admin logic
+                if (CURRENT_USER_IS_BRANCH_ADMIN && isSameBranch) {
+                    if (employee.is_branch_admin) {
+                        showErrorMessage("Cannot delete other branch admins");
+                        return;
+                    }
+
+                    if (confirm(`Are you sure you want to delete this employee?`)) {
+                        await axios.delete(API_BASE + entity + '/' + id + '/', {
+                            headers: { 'X-CSRFToken': csrftoken }
+                        });
+                        showSuccessMessage("Employee deleted successfully!");
+                        fetchData(entity);
+                    }
+                    return;
+                }
+
+                // Employee with can_delete permission
+                if (CURRENT_USER_CAN_DELETE && isSameBranch) {
+                    // Prevent deleting privileged employees
+                    if (employee.is_branch_admin ||
+                        employee.is_superuser ||
+                        employee.can_create ||
+                        employee.can_edit ||
+                        employee.can_delete) {
+                        showErrorMessage("Cannot delete privileged employees");
+                        return;
+                    }
+
+                    if (confirm(`Are you sure you want to delete this employee?`)) {
+                        await axios.delete(API_BASE + entity + '/' + id + '/', {
+                            headers: { 'X-CSRFToken': csrftoken }
+                        });
+                        showSuccessMessage("Employee deleted successfully!");
+                        fetchData(entity);
+                    }
+                    return;
+                }
+
+                showErrorMessage("You don't have permission to delete this employee");
+            } catch (error) {
+                showErrorMessage('Error deleting item:', error);
+            }
+        } else {
+            // For other entities, only superusers can delete
+            if (!IS_SUPERUSER) {
+                showErrorMessage("Only superusers can delete items");
+                return;
+            }
+
+            if (confirm(`Are you sure you want to delete this ${entity.slice(0, -1)}?`)) {
+                try {
+                    await axios.delete(API_BASE + entity + '/' + id + '/', {
+                        headers: { 'X-CSRFToken': csrftoken }
+                    });
+                    showSuccessMessage(`${entity.slice(0, -1)} deleted successfully!`);
+                    fetchData(entity);
+                } catch (error) {
+                    showErrorMessage('Error deleting item:', error);
+                }
+            }
+        }
+    }
+
+    // Update employee
+    window.updateEmployee = async function () {
+        // Collect form data
+        const formData = {
+            user: {
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value,
+                name: document.getElementById('name').value
+            },
+            mobile_number: document.getElementById('mobile_number').value.trim(),
+            city: document.getElementById('city').value.trim(),
+            state: document.getElementById('state').value.trim(),
+            designation: document.getElementById('designation').value.trim(),
+            joining_date: document.getElementById('joining_date').value,
+            date_of_birth: document.getElementById('date_of_birth').value
+        };
+
+        axios.post('/api/employees/', formData)
+            .then(response => {
+                // Handle success
+            })
+            .catch(error => {
+                // Handle error
+            });
+
+        // Frontend validation
+        const errors = {};
+        const requiredFields = [
+            { key: 'user.name', value: formData.user.name, field: 'name' },
+            { key: 'user.email', value: formData.user.email, field: 'email' },
+            { key: 'mobile_number', value: formData.mobile_number, field: 'mobile_number' },
+            { key: 'city', value: formData.city, field: 'city' },
+            { key: 'state', value: formData.state, field: 'state' },
+            { key: 'designation', value: formData.designation, field: 'designation' },
+            { key: 'joining_date', value: formData.joining_date, field: 'joining_date' },
+            { key: 'date_of_birth', value: formData.date_of_birth, field: 'date_of_birth' }
+        ];
+
+        requiredFields.forEach(({ key, value, field }) => {
+            if (!value) {
+                errors[key] = ["This field is required"];
+                highlightField(field);
+            }
+        });
+
+        if (Object.keys(errors).length > 0) {
+            displayErrors(errors);
+            return;
+        }
+
+        // Submit to backend
+        try {
+            const response = await axios.put(
+                `/api/employees/${currentItemId}/`,
+                formData,
+                {
+                    headers: {
+                        'X-CSRFToken': csrftoken,
+                        'Content-Type': 'application/json'
+                    }
+                }
+            );
+            showSuccessMessage('Employee updated successfully!');
+            fetchData(currentEntity);
+        } catch (error) {
+            if (error.response?.data) {
+                displayErrors(error.response.data);
+            } else {
+                showErrorMessage('Failed to update employee');
+            }
+        }
+    }
+
+    function highlightField(fieldId) {
+        const field = document.getElementById(fieldId);
+        if (field) {
+            field.style.border = '1px solid red';
+            field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    function displayErrors(errors) {
+        const errorContainer = document.getElementById('error-container');
+        errorContainer.innerHTML = '<h3>Please fix these errors:</h3><ul>';
+
+        // Flatten nested errors
+        const flatErrors = {};
+        for (const [key, value] of Object.entries(errors)) {
+            if (key === 'user') {
+                for (const [userKey, userValue] of Object.entries(value)) {
+                    flatErrors[`user.${userKey}`] = userValue;
+                    highlightField(userKey);
+                }
+            } else {
+                flatErrors[key] = value;
+                highlightField(key);
+            }
+        }
+
+        // Display errors
+        for (const [key, messages] of Object.entries(flatErrors)) {
+            const fieldName = key.split('.').pop().replace('_', ' ');
+            errorContainer.innerHTML += `<li><strong>${fieldName}:</strong> ${messages[0]}</li>`;
+        }
+
+        errorContainer.innerHTML += '</ul>';
+    }
+
+    // Show edit form for a specific item
+    window.showEditForm = async function (entity, id) {
+        currentEntity = entity;
+        currentItemId = id;
+
+        try {
+            const response = await axios.get(API_BASE + entity + '/' + id + '/');
+            const item = response.data;
+            const fields = ENTITY_FIELDS[entity] || [];
+            const isEditingSelf = id === CURRENT_USER_EMPLOYEE_ID;
+
+            // Store original username to compare later
+            const originalEmail = item.user ? item.user.email : '';
+
+
+
+            let formHtml = `
+                <div class="entity-header">
+                    <h2>Edit ${entity.slice(0, -1)} #${id}</h2>
+                    <button class="cancel-btn">Cancel</button>
+                </div>
+                <div class="form-container">
+                    <form id="edit-form">
+                        <input type="hidden" id="original_email" value="${originalEmail}">
+                        <div id="error-container"></div>
+            `;
+
+            // Check if current user is branch admin trying to edit another branch admin
+            const isEditingOtherAdmin = CURRENT_USER_IS_BRANCH_ADMIN &&
+                item.is_branch_admin &&
+                !isEditingSelf;
+
+            // Generate form fields
+            for (const field of fields) {
+                // Skip field if show condition is not met or if it's createOnly
+                if ((field.show !== undefined && !field.show) || field.createOnly) {
+                    continue;
+                }
+
+                if (field.type === 'hidden') {
+                    if (field.name === 'created_by') {
+                        formHtml += `<input type="hidden" id="${field.name}" name="${field.name}" value="${item[field.name] || ''}">`;
+                    } else if (field.name === 'modified_by') {
+                        formHtml += `<input type="hidden" id="${field.name}" name="${field.name}" value="${CURRENT_USER_ID}">`;
+                    }
+                    continue;
+                }
+
+                // Get the correct value - handle nested user object and datetime values
+                let value = '';
+                if (field.name === 'email' || field.name === 'name') {
+                    value = item.user ? item.user[field.name] : '';
+                } else if (field.name === 'city' || field.name === 'state') {
+                    // Skip datetime values completely
+                    value = (item[field.name] && typeof item[field.name] === 'string' &&
+                        !item[field.name].match(/\d{4}-\d{2}-\d{2}/)) ?
+                        item[field.name] : '';
+                } else if (field.name in item) {
+                    value = item[field.name];
+                    if (typeof value === 'object' && value !== null && value.id !== undefined) {
+                        value = value.id;
+                    }
+                }
+
+                formHtml += `<div class="form-group">`;
+                formHtml += `<label for="${field.name}">${field.name.replace('_', ' ')}${field.required ? '*' : ''}</label>`;
+
+                if (field.type === 'select' && field.optionsUrl) {
+                    try {
+                        const response = await axios.get(API_BASE + field.optionsUrl);
+                        const options = response.data;
+
+                        formHtml += `<select id="${field.name}" name="${field.name}" ${field.required ? 'required' : ''}>`;
+                        formHtml += `<option value="">Select ${field.name.replace('_', ' ')}</option>`;
+
+                        options.forEach(option => {
+                            const optionId = option.id;
+                            const optionName = option.name || optionId;
+                            const selected = optionId == value ? 'selected' : '';
+                            formHtml += `<option value="${optionId}" ${selected}>${optionName}</option>`;
+                        });
+
+                        formHtml += `</select>`;
+                    } catch (error) {
+                        console.error(`Error loading options for ${field.name}:`, error);
+                        formHtml += `<input type="text" id="${field.name}" name="${field.name}" value="${value || ''}" ${field.required ? 'required' : ''}>`;
+                    }
+                } else if (field.type === 'textarea') {
+                    formHtml += `<textarea id="${field.name}" name="${field.name}" ${field.required ? 'required' : ''}>${value || ''}</textarea>`;
+                } else if (field.type === 'checkbox') {
+                    const isChecked = value === true || value === 'true';
+                    formHtml += `<input type="checkbox" id="${field.name}" name="${field.name}" value="true" ${isChecked ? 'checked' : ''}>`;
+                } else {
+                    formHtml += `<input type="${field.type}" id="${field.name}" name="${field.name}" value="${value || ''}" ${field.required ? 'required' : ''}>`;
+                }
+
+                formHtml += `</div>`;
+            }
+
+            formHtml += `
+                    <div class="form-actions">
+                        <button type="button" class="cancel-btn">Cancel</button>
+                        ${isEditingOtherAdmin ? '' : '<button type="submit" class="submit-btn">Update</button>'}
+                    </div>
+                </form>
+            </div>`;
+
+            document.getElementById('api-response').innerHTML = formHtml;
+
+            // Add form submit handler if not editing another admin
+            const editForm = document.getElementById('edit-form');
+            if (editForm && !isEditingOtherAdmin) {
+                editForm.addEventListener('submit', async function (e) {
+                    e.preventDefault();
+                    await updateItem();
+                });
+            }
+
+            // Add cancel button handler
+            document.querySelector('.cancel-btn').addEventListener('click', function () {
+                fetchData(currentEntity);
+            });
+        } catch (error) {
+            console.error("Error in showEditForm:", error);
+            let errorMessage = 'Error loading item for editing: ';
+
+            if (error.response) {
+                errorMessage += error.response.data?.detail || JSON.stringify(error.response.data);
+            } else {
+                errorMessage += error.message || 'Unknown error';
+            }
+
+            document.getElementById('api-response').innerHTML = `
+                <div class="error">
+                    <h3>Error</h3>
+                    <p>${errorMessage}</p>
+                    <button onclick="fetchData('${entity}')">Back to List</button>
+                </div>
+            `;
+        }
+    };
+
+    // Update an item
+    const updateItem = async () => {
+
+        const form = document.getElementById('edit-form');
+        const formData = new FormData(form);
+        const data = {};
+
+        formData.forEach((value, key) => {
+            data[key] = value;
+        });
+
+        if (currentEntity === 'employees') {
+            const response = await axios.get(`${API_BASE}employees/${currentItemId}/`);
+            const employee = response.data;
+
+            const employeeBranchId = typeof employee.branch === 'object' ?
+                employee.branch.id : employee.branch;
+
+            const isSameBranch = employeeBranchId === CURRENT_USER_BRANCH_ID;
+            const isEditingSelf = currentItemId === CURRENT_USER_EMPLOYEE_ID;
+
+            const payload = {
+                user: {
+                    name: data.name,
+                    email: data.email
+                },
+                mobile_number: data.mobile_number,
+                address: data.address,
+                city: data.city,
+                state: data.state,
+                designation: data.designation,
+                branch: data.branch,
+                company: data.company,
+                // Add other fields as needed
+            };
+
+            if (IS_SUPERUSER || CURRENT_USER_IS_BRANCH_ADMIN) {
+                payload.is_branch_admin = data.is_branch_admin === 'true';
+                payload.can_create = data.can_create === 'true';
+                payload.can_edit = data.can_edit === 'true';
+                payload.can_delete = data.can_delete === 'true';
+            }
+
+            // Use PUT/PATCH request
+            try {
+                await axios.patch(`${API_BASE}employees/${currentItemId}/`, payload);
+                showSuccessMessage('Employee updated!');
+                fetchData('employees');
+            } catch (error) {
+                console.error('Update failed', error);
+            }
+
+            // Permission logic:
+            // - Superusers can edit anyone
+            // - Branch admins can edit employees in their branch (except other branch admins unless editing themselves)
+            // - Regular users can only edit themselves
+            if (!IS_SUPERUSER) {
+                if (CURRENT_USER_IS_BRANCH_ADMIN) {
+                    if (!isSameBranch || (employee.is_branch_admin && !isEditingSelf)) {
+                        throw new Error("You don't have permission to update this employee");
+                    }
+                } else if (!isEditingSelf) {
+                    throw new Error("You can only edit your own profile");
+                }
+            }
+        }
+        try {
+            const form = document.getElementById('edit-form');
+            const formData = new FormData(form);
+            const data = {};
+
+            // Convert FormData to object
+
+
+            // Special handling for employees
+            if (currentEntity === 'employees') {
+                data.user = {
+                    name: data.name
+                };
+
+
+
+
+
+                if ('is_superuser' in data) {
+                    data.user.is_superuser = data.is_superuser;
+                }
+
+                // Clean up
+                delete data.email;
+                delete data.name;
+            }
+
+            const url = `${API_BASE}${currentEntity}/${currentItemId}/`;
+            console.log('Request payload:', { url, data });
+
+            const response = await axios.patch(url, data, {
+                headers: {
+                    'X-CSRFToken': csrftoken,
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            console.log('Response:', response.data);
+            showSuccessMessage('Update successful!');
+            fetchData(currentEntity);
+
+        } catch (error) {
+            console.error('Update error:', error);
+
+            if (error.response) {
+                // Handle 400 validation errors
+                if (error.response.status === 400) {
+                    showErrorMessage(`Validation error: ${JSON.stringify(error.response.data)}`);
+                }
+                // Handle 403 forbidden
+                else if (error.response.status === 403) {
+                    showErrorMessage("You don't have permission to update this record");
+                }
+            } else {
+                showErrorMessage("Network error - please check your connection");
+            }
+        }
+    };
+
+    // Helper function to highlight error fields
+    function highlightErrorField(fieldId) {
+        const element = document.getElementById(fieldId);
+        if (element) {
+            element.style.borderColor = 'red';
+            element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }
+
+    // Improved error display
+    function showFieldErrors(errors) {
+        let errorHtml = '<div class="error-list"><h3>Please fix these errors:</h3><ul>';
+
+        // Reset all field borders
+        document.querySelectorAll('.form-group input, .form-group select, .form-group textarea').forEach(el => {
+            el.style.borderColor = '';
+        });
+
+        // Handle nested errors (like user.name)
+        for (const [field, messages] of Object.entries(errors)) {
+            if (field === 'user') {
+                // Handle nested user object errors
+                for (const [userField, userMessages] of Object.entries(messages)) {
+                    errorHtml += `<li><strong>${userField.replace('_', ' ')}:</strong> ${Array.isArray(userMessages) ? userMessages.join(', ') : userMessages}</li>`;
+                    highlightErrorField(userField);
+                }
+            } else {
+                errorHtml += `<li><strong>${field.replace('_', ' ')}:</strong> ${Array.isArray(messages) ? messages.join(', ') : messages}</li>`;
+                highlightErrorField(field);
+            }
+        }
+
+        errorHtml += '</ul></div>';
+
+        const errorContainer = document.getElementById('error-container');
+        if (errorContainer) {
+            errorContainer.innerHTML = errorHtml;
+        } else {
+            // Create error container if it doesn't exist
+            const container = document.createElement('div');
+            container.id = 'error-container';
+            container.innerHTML = errorHtml;
+            document.querySelector('.form-container').prepend(container);
+        }
+    }
+
+    // Helper function to show success messages
+    window.showSuccessMessage = function (message) {
+        const alert = document.createElement('div');
+        alert.className = 'success-message';
+        alert.innerHTML = message;
+        document.getElementById('api-response').prepend(alert);
+        setTimeout(() => alert.remove(), 3000);
+    }
+
+    // Helper function to show error messages
+    window.showErrorMessage = function (message, error) {
+        let errorMessage = message;
+
+        if (error && error.response) {
+            // Handle email conflict specifically
+            if (error.response.status === 400 &&
+                error.response.data.user?.email) {
+                errorMessage = error.response.data.user.email[0];
+            } else {
+                errorMessage += ` ${error.response.data?.detail || JSON.stringify(error.response.data)}`;
+            }
+        }
+
+        const errorContainer = document.getElementById('error-container') ||
+            document.createElement('div');
+        errorContainer.id = 'error-container';
+        errorContainer.className = 'error-message';
+        errorContainer.innerHTML = `
+            <h4>Update Failed</h4>
+            <p>${errorMessage}</p>
+            <button onclick="this.parentElement.remove()">Dismiss</button>
+        `;
+
+        document.getElementById('api-response').prepend(errorContainer);
+    }
+
+    function showInlineError(element, message) {
+        let errorElement = element.nextElementSibling;
+        if (!errorElement || !errorElement.classList.contains('inline-error')) {
+            errorElement = document.createElement('div');
+            errorElement.className = 'inline-error';
+            errorElement.style.color = 'red';
+            errorElement.style.fontSize = '0.85em';
+            element.parentNode.insertBefore(errorElement, element.nextSibling);
+        }
+        errorElement.textContent = message;
+    }
+
+    // Initialize event listeners when DOM is loaded
+    document.addEventListener('DOMContentLoaded', function () {
+        // Entity links
+        document.querySelectorAll('.entity-link').forEach(link => {
+            link.addEventListener('click', function (e) {
+                e.preventDefault();
+                fetchData(this.dataset.entity);
+            });
+        });
+
+        // Create buttons
+        document.querySelectorAll('.create-btn').forEach(btn => {
+            btn.addEventListener('click', function () {
+                showCreateForm(this.dataset.entity);
+            });
+        });
+    });
+}) ();
+</script>
+
+<style>
+    .card {
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        padding: 20px;
+        margin: 20px;
+    }
+
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid #eee;
+    }
+
+    .auth-info {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .dashboard-container {
+        display: flex;
+        gap: 20px;
+    }
+
+    .navigation {
+        width: 250px;
+        background: #f8f9fa;
+        padding: 15px;
+        border-radius: 6px;
+    }
+
+    .nav-section {
+        margin-bottom: 20px;
+    }
+
+    .nav-section h3 {
+        margin-top: 0;
+        color: #333;
+        font-size: 18px;
+    }
+
+    .nav-section ul {
+        list-style: none;
+        padding: 0;
+        margin: 10px 0 0 0;
+    }
+
+    .nav-section li {
+        padding: 8px 0;
+    }
+
+    .nav-section a {
+        text-decoration: none;
+        color: #333;
+        display: block;
+        padding: 5px 10px;
+        border-radius: 4px;
+    }
+
+    .nav-section a:hover {
+        background-color: #e9ecef;
+    }
+
+    .create-buttons {
+        margin-top: 30px;
+    }
+
+    .create-buttons h3 {
+        margin-bottom: 10px;
+    }
+
+    .create-buttons button {
+        display: block;
+        width: 100%;
+        margin-bottom: 10px;
+    }
+
+    .content-area {
+        flex: 1;
+        background: white;
+        padding: 20px;
+        border-radius: 6px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .response-area {
+        min-height: 300px;
+    }
+
+    .entity-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .entity-list {
+        margin-top: 20px;
+        overflow-x: auto;
+    }
+
+    .entity-table {
+        width: 100%;
+        border-collapse: collapse;
+    }
+
+    .entity-table th,
+    .entity-table td {
+        padding: 12px 15px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+
+    .entity-table th {
+        background-color: #f8f9fa;
+        font-weight: bold;
+    }
+
+    .entity-table tr:hover {
+        background-color: #f5f5f5;
+    }
+
+    /* Improved actions cell styling */
+    .actions-header {
+        text-align: center;
+        width: 180px;
+    }
+
+    .actions-cell {
+        padding: 8px !important;
+        text-align: center;
+        width: 180px;
+    }
+
+    .actions {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        flex-wrap: nowrap;
+    }
+
+    .no-data {
+        padding: 20px;
+        text-align: center;
+        color: #666;
+    }
+
+    /* Form styles */
+    .form-container {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        margin-top: 20px;
+    }
+
+    .form-group {
+        margin-bottom: 15px;
+    }
+
+    .form-group label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 500;
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="email"],
+    .form-group input[type="number"],
+    .form-group input[type="date"],
+    .form-group select,
+    .form-group textarea {
+        width: 100%;
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        box-sizing: border-box;
+    }
+
+    .form-group textarea {
+        min-height: 80px;
+        resize: vertical;
+    }
+
+    .form-group input[type="checkbox"] {
+        width: auto;
+        margin-right: 5px;
+    }
+
+    .form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    /* Button styles */
+    .create-btn,
+    .edit-btn,
+    .delete-btn,
+    .submit-btn,
+    .cancel-btn {
+        padding: 8px 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        white-space: nowrap;
+    }
+
+    .create-btn,
+    .submit-btn {
+        background-color: #4CAF50;
+        color: white;
+    }
+
+    .edit-btn {
+        background-color: #2196F3;
+        color: white;
+    }
+
+    .delete-btn {
+        background-color: #f44336;
+        color: white;
+    }
+
+    .cancel-btn {
+        background-color: #9e9e9e;
+        color: white;
+    }
+
+    /* Message styles */
+    .success-message {
+        background-color: #d4edda;
+        color: #155724;
+        padding: 10px;
+        border-radius: 4px;
+        margin-bottom: 15px;
+    }
+
+    .error {
+        background-color: #f8d7da;
+        color: #721c24;
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+    }
+
+    .error pre {
+        background-color: white;
+        padding: 10px;
+        border-radius: 4px;
+        overflow-x: auto;
+    }
+
+    .checkbox-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 15px;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+        width: auto;
+        margin: 0;
+    }
+
+    .checkbox-group label {
+        margin: 0;
+        font-weight: normal;
+    }
+
+    .permission-section {
+        margin: 20px 0;
+        padding: 15px;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+    }
+
+    .permission-section h3 {
+        margin-top: 0;
+        margin-bottom: 15px;
+        color: #333;
+        font-size: 16px;
+        border-bottom: 1px solid #ddd;
+        padding-bottom: 8px;
+    }
+
+    .error-message {
+        background-color: #ffebee;
+        border-left: 4px solid #f44336;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+    }
+
+    .error-message h4 {
+        margin-top: 0;
+        color: #d32f2f;
+    }
+
+    .error-message button {
+        background: none;
+        border: none;
+        color: #d32f2f;
+        cursor: pointer;
+        float: right;
+        font-weight: bold;
+    }
+
+    .inline-error {
+        color: red;
+        font-size: 0.85em;
+        margin-top: 5px;
+    }
+</style>
+{% endblock %}
